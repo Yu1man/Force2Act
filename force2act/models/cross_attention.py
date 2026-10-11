@@ -14,7 +14,7 @@ from force2act.models.components.embeddings import (
     LearnedPositionalEmbedding
 )
 
-from force2act.models.policy.flow_matching import flow_matching_loss
+from force2act.models.policy.flow_matching import flow_matching_loss, sample_action
 
 
 class CrossAttentionForce2Act(nn.Module):
@@ -266,6 +266,73 @@ if __name__ == "__main__":
     loss.backward()
 
     print("Backward succeeded")
+
+    optimizer = torch.optim.AdamW(
+        force_model.parameters(),
+        lr=1e-4,
+    )
+
+    for step in range(2):
+        optimizer.zero_grad()
+
+        loss = flow_matching_loss(
+            model=force_model,
+            actions=actions,
+            images=images,
+            state=state,
+            action_mask=action_mask,
+            force=force,
+        )
+
+        loss.backward()
+
+        print(f"\nStep {step + 1}")
+        print("Loss:", loss.item())
+
+        # Final output layer
+        print(
+            "Final projection grad:",
+            force_model.final_layer.output_proj.weight.grad.abs().mean().item()
+        )
+
+        # Action encoder
+        action_grad = force_model.action_encoder.action_encoder[0].weight.grad
+
+        print(
+            "Action encoder grad:",
+            None if action_grad is None
+            else action_grad.abs().mean().item()
+        )
+
+        # First DiT block AdaLN
+        dit_grad = (
+            force_model.blocks[0]
+            .adaln_modulation[-1]
+            .weight.grad
+        )
+
+        print(
+            "DiT AdaLN grad:",
+            None if dit_grad is None
+            else dit_grad.abs().mean().item()
+        )
+
+        optimizer.step()
+
+        force_model.eval()
+
+    sampled_actions = sample_action(
+        model=force_model,
+        images=images,
+        state=state,
+        action_horizon=16,
+        action_dim=7,
+        num_steps=20,
+        force=force,
+    )
+
+    print(sampled_actions.shape)
+    print(torch.isfinite(sampled_actions).all())
 
 
 

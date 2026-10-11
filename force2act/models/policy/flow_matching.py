@@ -23,7 +23,7 @@ def flow_matching_loss(
 
     t = torch.rand(batch, device=actions.device, dtype=actions.dtype)   # [B]
 
-    x_t = noise * (1 - t[:, None, None]) + actions * t[:, None, None]
+    x_t = noise * (1 - t[:, None, None]) + actions * t[:, None, None]   # [B, T, D]
 
     target_velocity = actions - noise
 
@@ -46,3 +46,52 @@ def flow_matching_loss(
     loss = valid_error.mean()
 
     return loss
+
+
+@torch.no_grad()
+def sample_action(
+    model,
+    images,
+    state,
+    action_horizon: int,
+    action_dim: int,
+    num_steps: int = 20,
+    force=None,
+):
+    if num_steps <= 0:
+        raise ValueError(f"num_steps must be greater than 0, got {num_steps}")
+    
+    B = state.shape[0]
+
+    x = torch.randn(    # [B, T, D]
+        B,
+        action_horizon,
+        action_dim,
+        device=state.device,
+        dtype=state.dtype,
+    )
+
+    dt = 1 / num_steps
+
+    for step in range(num_steps):
+        t = step / num_steps
+
+        time = torch.full(
+            (B,),
+            t,
+            device=x.device,
+            dtype=x.dtype,
+        )
+
+        pred_velocity = model(
+            x,
+            time,
+            images,
+            state,
+            force
+        )
+
+        x = x + dt * pred_velocity
+
+    return x
+
