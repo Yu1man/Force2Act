@@ -1,8 +1,8 @@
 import torch
 
-def preprocess_images(images: torch.Tensor):
+def preprocess_images(images: torch.Tensor) -> torch.Tensor:
     # [B, N_cam, T_obs, 3, H, W]
-    
+
     ndim = images.ndim
 
     leading_dims = ndim - 3

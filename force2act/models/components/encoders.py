@@ -44,9 +44,10 @@ class VisionEncoder(nn.Module):
         self.spatial_pos_emb = LearnedSpatialPositionalEmbedding(max_h, max_w, hidden_dim)
 
 
-    def forward(self, images:torch.Tensor):
+    def forward(self, images:torch.Tensor) -> torch.Tensor:
         """
         Input:  [B, N_cam, T_obs, C, H, W]
+        output: [B, T_obs, hidden_dim]
         """
 
         if images.ndim != 6:
@@ -84,7 +85,7 @@ class VisionEncoder(nn.Module):
 
         features = features + self.camera_pos_emb[:, :N, :, :, :] + self.t_pos_emb[:, :, :T, :, :] + self.spatial_pos_emb(Hf, Wf)   # [B, N, T, spatial_tokens, D]
 
-        features = features.reshape(B, N * T * Hf * Wf, h_dim)
+        features = features.reshape(B, N * T * Hf * Wf, h_dim)  # [B, T, D]
 
         return features
 
@@ -119,9 +120,10 @@ class StateEncoder(nn.Module):
             nn.Linear(hidden_dim, hidden_dim)
         )
 
-    def forward(self, state: torch.Tensor):
+    def forward(self, state: torch.Tensor) -> torch.Tensor:
         """
         input: [B, T_obs, state_dim]
+        output: [B, T_obs, hidden_dim]
         """
         if state.ndim != 3:
             raise ValueError(f"State has {state.ndim} dimensions, expected 3")
@@ -152,9 +154,10 @@ class ForceEncoder(nn.Module):
             nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
         )
 
-    def forward(self, force: torch.Tensor):
+    def forward(self, force: torch.Tensor) -> torch.Tensor:
         """
         input: [B, T_obs, force_dim]
+        output: [B, T_obs, hidden_dim]
         """
         if force.ndim != 3:
             raise ValueError(f"Force has  {force.ndim} dimension , expected 3")
@@ -189,13 +192,14 @@ class ActionEncoder(nn.Module):
             nn.Linear(hidden_dim, hidden_dim)
         )
 
-    def forward(self, action: torch.Tensor):
+    def forward(self, action: torch.Tensor) -> torch.Tensor:
         """
         input: [B, T_action, action_dim]
+        output: [B, T_action, hidden_dim]
         """
 
         if action.ndim != 3:
-            raise ValueError(f"Action has  {action.ndim} dimension , expected 3")
+            raise ValueError(f"Action has {action.ndim} dimension , expected 3")
 
         if action.shape[-1] != self.action_dim:
             raise ValueError(f"Action has feature dimension of {action.shape[-1]}, expected {self.action_dim}")
