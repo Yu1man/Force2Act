@@ -1,0 +1,13 @@
+# Core numerical / data dependencies
+numpy>=1.26
+h5py>=3.10
+PyYAML>=6.0
+
+# Deep learning
+torch>=2.2
+torchvision>=0.17
+timm>=1.0
+
+# Training / experiment utilities
+wandb>=0.17
+tqdm>=4.66
