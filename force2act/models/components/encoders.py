@@ -3,7 +3,7 @@ import torch.nn as nn
 
 import timm
 
-from forcefm.models.components.embeddings import LearnedSpatialPositionalEmbedding
+from force2act.models.components.embeddings import LearnedSpatialPositionalEmbedding, LearnedPositionalEmbedding
 
 # Vision Encoder
 class VisionEncoder(nn.Module):
@@ -101,6 +101,112 @@ class VisionEncoder(nn.Module):
 
 
 
+# State (Proprioceptive) Encoder
+class StateEncoder(nn.Module):
+    def __init__(
+        self,
+        state_dim: int,
+        hidden_dim: int,
+    ):
+        super().__init__()
+
+        self.state_dim = state_dim
+        self.hidden_dim = hidden_dim
+
+        self.state_encoder = nn.Sequential(                  # [B, T_obs, 9]
+            nn.Linear(state_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
+
+    def forward(self, state: torch.Tensor):
+        """
+        input: [B, T_obs, state_dim]
+        """
+        if state.ndim != 3:
+            raise ValueError(f"State has {state.ndim} dimensions, expected 3")
+
+        if state.shape[-1] != self.state_dim:
+            raise ValueError(f"State has feature dimension of {state.shape[-1]}, expected {self.state_dim}")
+
+        state_feat = self.state_encoder(state)   # [B, T_obs, hidden_dim]
+
+        return state_feat
+
+
+# Force Encoder
+class ForceEncoder(nn.Module):
+    def __init__(
+        self,
+        force_dim: int,
+        hidden_dim: int,
+    ):
+        super().__init__()
+
+        self.force_dim = force_dim
+        self.hidden_dim = hidden_dim
+
+        self.force_encoder = nn.Sequential(
+            nn.Conv1d(force_dim, hidden_dim, kernel_size=3, padding=1),
+            nn.SiLU(),
+            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
+        )
+
+    def forward(self, force: torch.Tensor):
+        """
+        input: [B, T_obs, force_dim]
+        """
+        if force.ndim != 3:
+            raise ValueError(f"Force has  {force.ndim} dimension , expected 3")
+
+        if force.shape[-1] != self.force_dim:
+            raise ValueError(f"Force has feature dimension of {force.shape[-1]}, expected {self.force_dim}")
+
+        force = force.transpose(-1, -2) # [B, 3, T_obs]
+
+        force_feat = self.force_encoder(force)
+
+        force_feat = force_feat.transpose(-1, -2)    # [B, T_obs, hidden_dim]
+
+        return force_feat
+
+
+# Action Encoder
+class ActionEncoder(nn.Module):
+    def __init__(
+        self,
+        action_dim: int,
+        hidden_dim: int,
+    ):
+        super().__init__()
+
+        self.action_dim = action_dim
+        self.hidden_dim = hidden_dim
+
+        self.action_encoder = nn.Sequential(
+            nn.Linear(action_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
+
+    def forward(self, action: torch.Tensor):
+        """
+        input: [B, T_action, action_dim]
+        """
+
+        if action.ndim != 3:
+            raise ValueError(f"Action has  {action.ndim} dimension , expected 3")
+
+        if action.shape[-1] != self.action_dim:
+            raise ValueError(f"Action has feature dimension of {action.shape[-1]}, expected {self.action_dim}")
+
+        action_feat = self.action_encoder(action)   # [B, T, D]
+
+        return action_feat
+
+
+
+
 if __name__ == "__main__":
     images = torch.randn(4, 2, 3, 3, 224, 224)
 
@@ -110,3 +216,28 @@ if __name__ == "__main__":
 
     print(output.shape)
     print(encoder.backbone.num_features)
+
+    state = torch.randn(4, 3, 9)
+
+    encoder = StateEncoder(9, 256)
+    output = encoder(state)
+
+    print(output.shape)
+
+    encoder = ForceEncoder(force_dim=3, hidden_dim=256)
+
+    for T in [1, 3, 5]:
+        force = torch.randn(4, T, 3)
+        output = encoder(force)
+        print(T, output.shape)
+
+    action = torch.randn(4, 16, 7)
+
+    encoder = ActionEncoder(
+        action_dim=7,
+        hidden_dim=256,
+    )
+
+    output = encoder(action)
+
+    print(output.shape)

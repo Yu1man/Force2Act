@@ -1,8 +1,8 @@
 from torch.utils.data import Dataset
-from forcefm.data.windowing import extract_window
+from force2act.data.windowing import extract_window
 import torch
 
-from forcefm.data.episode import Episode
+from force2act.data.episode import Episode
 
 class EpisodeDataset(Dataset):
 

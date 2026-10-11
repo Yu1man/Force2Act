@@ -1,5 +1,5 @@
 import torch
-from forcefm.data.episode import Episode
+from force2act.data.episode import Episode
 
 def make_window_indices(current_t, ep_length, history, action_horizon):
 

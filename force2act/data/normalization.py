@@ -1,6 +1,6 @@
 import torch
 from dataclasses import dataclass
-from forcefm.data.episode import Episode
+from force2act.data.episode import Episode
 
 def collect_episode_field(episodes, field):
 
@@ -70,7 +70,6 @@ def fit_normalizer(episodes):
         stats[field] = ModalityStats(mean, std)
 
     return StandardNormalizer(stats)
-
 
 
 

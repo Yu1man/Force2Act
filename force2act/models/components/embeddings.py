@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+# Image Spatial Positional Embedding
 class LearnedSpatialPositionalEmbedding(nn.Module):
     def __init__(
         self,
@@ -37,5 +38,41 @@ class LearnedSpatialPositionalEmbedding(nn.Module):
         spatial_pos_emb = spatial_pos_emb.reshape(B, N, T, H*W, h_dim)  # [1, 1, 1, H*W, hidden_dim]
 
         return spatial_pos_emb
+
+
+# Positional Embedding
+class LearnedPositionalEmbedding(nn.Module):
+    def __init__(
+        self,
+        hidden_dim: int,
+        max_length: int,
+    ):
+
+        super().__init__()
+
+        self.hidden_dim = hidden_dim
+        self.max_length = max_length
+
+        self.pos_emb = nn.Parameter(torch.empty(1, max_length, hidden_dim))    # [1, max_history, hidden_dim]
+        nn.init.normal_(self.pos_emb, mean=0.0, std=0.02)
+
+    def forward(self, feat:torch.Tensor):
+        if feat.ndim != 3:
+            raise ValueError(f"Feature has dimension of {feat.ndim}, expected 3")
+
+        B, T, D = feat.shape
+
+        if D != self.hidden_dim:
+            raise ValueError(f"Feature has hidden dimension of {D}, expected {self.hidden_dim}")
+
+        if T > self.max_length:
+            raise ValueError(f"Feature has length of {T}, exceeded max length {self.max_length}")
+
+        feat_pos = feat + self.pos_emb[:, :T, :]    # [B, T, D]
+
+        return feat_pos
+
+
+
 
 
