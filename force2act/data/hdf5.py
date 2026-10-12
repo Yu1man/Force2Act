@@ -83,7 +83,6 @@ def load_episode(
                 dtype=torch.float64,
             )
 
-
         return Episode(
             images=images,
             state=states,
@@ -91,6 +90,30 @@ def load_episode(
             actions=actions,
             timestamps=timestamps
         )
+
+
+def load_episodes(
+    hdf5_path: str,
+    demo_names: Sequence[str],
+    state_keys: Sequence[str],
+    camera_keys: Sequence[str],
+    force_keys: Sequence[str] | None = None,
+):
+
+    episodes = []
+
+    for demo_name in demo_names:
+        episode = load_episode(
+            hdf5_path=hdf5_path,
+            demo_name=demo_name,
+            state_keys=state_keys,
+            camera_keys=camera_keys,
+            force_keys=force_keys
+        )
+
+        episodes.append(episode)
+
+    return episodes
 
 
 if __name__ == "__main__":
@@ -117,4 +140,25 @@ if __name__ == "__main__":
     print(episode.force.shape)
     print(episode.actions.shape)
     print(episode.timestamps.shape)
+
+    episodes = load_episodes(
+        hdf5_path="/home/yui/Desktop/forcevam_karl/datasets/robosuite/door_push_pull.hdf5",
+        demo_names= ["demo_0", "demo_1"],
+        state_keys=[
+            "robot0_eef_pos",
+            "robot0_eef_quat",
+            "robot0_gripper_qpos",
+        ],
+        camera_keys=[
+            "agentview_image",
+            "robot0_eye_in_hand_image",
+        ],
+        force_keys=[
+            "robot0_eef_force",
+        ],
+    )
+
+    print(len(episodes))
+    print(episodes[0].state.shape)
+    print(episodes[1].state.shape)
 
