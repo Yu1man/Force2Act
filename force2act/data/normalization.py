@@ -36,6 +36,13 @@ class ModalityStats:
 class StandardNormalizer:
     stats: dict[str, ModalityStats]
 
+    def to(self, device):
+        for modality_stats in self.stats.values():
+            modality_stats.mean = modality_stats.mean.to(device)
+            modality_stats.std = modality_stats.std.to(device)
+
+        return self
+
 
     def normalize(self, values, field):
         modality_stats = self.stats[field]
@@ -70,6 +77,7 @@ def fit_normalizer(episodes):
         stats[field] = ModalityStats(mean, std)
 
     return StandardNormalizer(stats)
+
 
 
 
@@ -135,3 +143,11 @@ if __name__ == "__main__":
     )
 
     print(torch.allclose(all_actions, recovered_actions))
+
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    normalizer = fit_normalizer(episodes).to(device)
+
+    print(normalizer.stats["state"].mean.device)
+    print(normalizer.stats["actions"].mean.device)

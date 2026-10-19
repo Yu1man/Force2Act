@@ -59,7 +59,7 @@ def get_train_val_names(hdf5_path: str):
 
         if "data" not in f:
             raise KeyError("HDF5 file does not contain a 'data' group")
-        
+
         demo_names = [name for name in f["data"].keys() if name.startswith("demo_")]
 
         missing_train = set(train_names) - set(demo_names)

@@ -12,3 +12,7 @@ env/
 
 # macOS
 .DS_Store
+
+tests/
+
+datasets/

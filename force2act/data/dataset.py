@@ -33,7 +33,6 @@ class EpisodeDataset(Dataset):
 
 
 
-
 if __name__ == "__main__":
 
     images = torch.randn(5, 2, 3, 64, 64)
