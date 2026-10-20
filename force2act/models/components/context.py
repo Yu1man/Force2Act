@@ -84,4 +84,8 @@ class ContextEncoder(nn.Module):
 
         context = self.layer_norm(context)
 
-        return context
+        if self.use_force:
+            normalized_force_feat = self.layer_norm(force_feat)
+            return context, normalized_force_feat
+
+        return context, None

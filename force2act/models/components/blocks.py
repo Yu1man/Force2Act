@@ -1,6 +1,17 @@
 import torch
 import torch.nn as nn
 
+
+# Modulate
+def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
+    """
+    x       [B, T ,D]
+    shift   [B, D]
+    scale   [B, D]
+    """
+    return x * (1.0 + scale[:, None, :]) + shift[:, None, :]
+
+
 # Cross-Attention
 class CrossAttention(nn.Module):
     def __init__(
@@ -142,69 +153,6 @@ class FeedForward(nn.Module):
         return output
 
 
-# Modulate
-def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
-    """
-    x       [B, T ,D]
-    shift   [B, D]
-    scale   [B, D]
-    """
-    return x * (1.0 + scale[:, None, :]) + shift[:, None, :]
-
-
-
-# DiT Block
-class DiTBlock(nn.Module):
-    def __init__(
-        self,
-        hidden_dim: int,
-        num_heads: int,
-        dropout: float,
-        mlp_ratio: int = 4,
-    ):
-        super().__init__()
-
-        self.hidden_dim = hidden_dim
-
-        self.cross_attn = CrossAttention(hidden_dim, num_heads, dropout)
-        self.cross_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
-
-        self.self_attn = SelfAttention(hidden_dim, num_heads, dropout)
-        self.self_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
-
-        self.ffn = FeedForward(hidden_dim, dropout, mlp_ratio)
-        self.ffn_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
-
-        self.adaln_modulation = nn.Sequential(
-            nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim * 9)
-        )
-
-        nn.init.zeros_(self.adaln_modulation[-1].weight)
-        nn.init.zeros_(self.adaln_modulation[-1].bias)
-
-
-
-    def forward(self, action: torch.Tensor, context: torch.Tensor, time_emb: torch.Tensor) -> torch.Tensor:
-
-        (cross_shift, cross_scale, cross_gate,
-        self_shift, self_scale, self_gate,
-        ffn_shift, ffn_scale, ffn_gate) = self.adaln_modulation(time_emb).chunk(9, dim=-1)
-
-        action_cross = modulate(self.cross_norm(action), cross_shift, cross_scale)
-        action_cross = self.cross_attn(action_cross, context)
-        action_cross = action + action_cross * cross_gate[:, None, :]
-
-        action_self = modulate(self.self_norm(action_cross), self_shift, self_scale)
-        action_self = self.self_attn(action_self)
-        action_self = action_cross + action_self * self_gate[:, None, :]
-
-        action_ffn = modulate(self.ffn_norm(action_self), ffn_shift, ffn_scale)
-        action_ffn = self.ffn(action_ffn)
-        action_ffn = action_self + action_ffn * ffn_gate[:, None, :]
-
-        return action_ffn
-
 
 class FinalLayer(nn.Module):
     def __init__(
@@ -241,8 +189,120 @@ class FinalLayer(nn.Module):
 
 
 
+# DiT Block
+class DiTBlock(nn.Module):
+    def __init__(
+        self,
+        hidden_dim: int,
+        num_heads: int,
+        dropout: float,
+        mlp_ratio: int = 4,
+    ):
+        super().__init__()
+
+        self.hidden_dim = hidden_dim
+
+        self.cross_attn = CrossAttention(hidden_dim, num_heads, dropout)
+        self.cross_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
+
+        self.self_attn = SelfAttention(hidden_dim, num_heads, dropout)
+        self.self_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
+
+        self.ffn = FeedForward(hidden_dim, dropout, mlp_ratio)
+        self.ffn_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
+
+        self.adaln_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim * 9)
+        )
+
+        nn.init.zeros_(self.adaln_modulation[-1].weight)
+        nn.init.zeros_(self.adaln_modulation[-1].bias)
 
 
+
+    def forward(self, action: torch.Tensor, context: torch.Tensor, modulate_emb: torch.Tensor) -> torch.Tensor:
+
+        (cross_shift, cross_scale, cross_gate,
+        self_shift, self_scale, self_gate,
+        ffn_shift, ffn_scale, ffn_gate) = self.adaln_modulation(modulate_emb).chunk(9, dim=-1)
+
+        action_cross = modulate(self.cross_norm(action), cross_shift, cross_scale)
+        action_cross = self.cross_attn(action_cross, context)
+        action_cross = action + action_cross * cross_gate[:, None, :]
+
+        action_self = modulate(self.self_norm(action_cross), self_shift, self_scale)
+        action_self = self.self_attn(action_self)
+        action_self = action_cross + action_self * self_gate[:, None, :]
+
+        action_ffn = modulate(self.ffn_norm(action_self), ffn_shift, ffn_scale)
+        action_ffn = self.ffn(action_ffn)
+        action_ffn = action_self + action_ffn * ffn_gate[:, None, :]
+
+        return action_ffn
+
+
+# Force-Specific Refinement Attention (FSRA) block
+class FSRADiTBlock(nn.Module):
+    def __init__(
+        self,
+        hidden_dim: int,
+        num_heads: int,
+        dropout: float,
+        mlp_ratio: int = 4,
+    ):
+        super().__init__()
+
+        self.hidden_dim = hidden_dim
+
+        self.cross_attn = CrossAttention(hidden_dim, num_heads, dropout)
+        self.cross_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
+
+        self.force_attn = CrossAttention(hidden_dim, num_heads, dropout)
+
+        self.self_attn = SelfAttention(hidden_dim, num_heads, dropout)
+        self.self_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
+
+        self.ffn = FeedForward(hidden_dim, dropout, mlp_ratio)
+        self.ffn_norm = nn.LayerNorm(hidden_dim, elementwise_affine=False)
+
+        self.adaln_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim * 9)
+        )
+
+        nn.init.zeros_(self.adaln_modulation[-1].weight)
+        nn.init.zeros_(self.adaln_modulation[-1].bias)
+
+        self.alpha = nn.Parameter(torch.tensor(0.1))
+
+
+
+    def forward(self, action: torch.Tensor, context: torch.Tensor, force_emb: torch.Tensor, modulate_emb: torch.Tensor) -> torch.Tensor:
+
+        (cross_shift, cross_scale, cross_gate,
+        self_shift, self_scale, self_gate,
+        ffn_shift, ffn_scale, ffn_gate) = self.adaln_modulation(modulate_emb).chunk(9, dim=-1)
+
+        action_cross = modulate(self.cross_norm(action), cross_shift, cross_scale)
+
+        joint_cross = self.cross_attn(action_cross, context)
+
+        force_cross = self.force_attn(action_cross, force_emb)
+
+        fused_emb = joint_cross + force_cross * self.alpha
+
+        action_cross = action + fused_emb * cross_gate[:, None, :]
+
+        action_self = modulate(self.self_norm(action_cross), self_shift, self_scale)
+        action_self = self.self_attn(action_self)
+        action_self = action_cross + action_self * self_gate[:, None, :]
+
+        action_ffn = modulate(self.ffn_norm(action_self), ffn_shift, ffn_scale)
+        action_ffn = self.ffn(action_ffn)
+        action_ffn = action_self + action_ffn * ffn_gate[:, None, :]
+
+        return action_ffn
 
 
 
