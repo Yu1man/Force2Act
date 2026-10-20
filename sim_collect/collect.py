@@ -19,19 +19,19 @@ class CollectorSpec:
 COLLECTORS = (
     CollectorSpec(
         name="weight-sort",
-        module="sim_collect.weight_sort",
+        module="sim_collect.sim_env.weight_sort",
         description="Paired light/heavy PickPlaceCan force demonstrations.",
         aliases=("weight", "weight-sort-pick-place"),
     ),
     CollectorSpec(
         name="door",
-        module="sim_collect.door",
+        module="sim_collect.sim_env.door",
         description="Paired push/pull force-conditioned Door demonstrations.",
         aliases=("door-push-pull", "push-pull"),
     ),
     CollectorSpec(
         name="nut-assembly",
-        module="sim_collect.nut_assembly",
+        module="sim_collect.sim_env.nut_assembly",
         description="Continuous NutAssemblySquare replay with live force sensing.",
         aliases=("nut", "square-nut", "nut-assembly-square"),
     ),
