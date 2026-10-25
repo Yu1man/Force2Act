@@ -8,11 +8,13 @@ from tqdm.auto import tqdm
 from force2act.data.dataset import EpisodeDataset
 from force2act.data.normalization import fit_normalizer
 from force2act.models.factory import build_model
-from force2act.training.utils.checkpoint import normalizer_from_state_dict, save_checkpoint
-from force2act.training.utils.config import save_config
-from force2act.training.utils.data import build_dataloaders, load_train_val_episodes
-from force2act.training.utils.steps import infinite_loader, train_step, validate
-from force2act.training.utils.tracking import init_wandb
+from training.utils.checkpoint import normalizer_from_state_dict, save_checkpoint
+from training.utils.config import save_config
+from training.utils.data import build_dataloaders, load_train_val_episodes
+from training.utils.steps import infinite_loader, train_step, validate
+from training.utils.tracking import init_wandb
+from training.utils.rollout import run_sim_rollout_validation
+
 
 
 def seed_everything(seed):
@@ -49,10 +51,14 @@ def main(config, args):
     train_episodes, val_episodes = load_train_val_episodes(config)
     print(f'Train episodes: {len(train_episodes)}')
     print(f'Val episodes: {len(val_episodes)}')
+
+
     if checkpoint is not None:
         normalizer = normalizer_from_state_dict(checkpoint['normalizer'])
     else:
         normalizer = fit_normalizer(train_episodes)
+
+
     normalizer.to(device)
     history = int(dataset_cfg['history'])
     action_horizon = int(dataset_cfg['action_horizon'])
@@ -64,18 +70,39 @@ def main(config, args):
     train_iterator = infinite_loader(train_loader)
     model = build_model(config).to(device)
     trainable_parameters = [parameter for parameter in model.parameters() if parameter.requires_grad]
+
+
     if not trainable_parameters:
         raise RuntimeError('Model has no trainable parameters.')
+
+
     num_trainable = sum((parameter.numel() for parameter in trainable_parameters))
     print(f'Trainable parameters: {num_trainable:,}')
     learning_rate = float(training_cfg['learning_rate'])
     weight_decay = float(training_cfg.get('weight_decay', 0.0001))
     optimizer = torch.optim.AdamW(trainable_parameters, lr=learning_rate, weight_decay=weight_decay)
+
     max_steps = int(training_cfg['max_steps'])
+
     log_interval = int(training_cfg.get('log_interval', 20))
     val_interval = int(training_cfg.get('val_interval', 1000))
-    checkpoint_interval = int(training_cfg.get('checkpoint_interval', 1000))
-    grad_clip_norm = training_cfg.get('grad_clip_norm')
+    checkpoint_interval = int(training_cfg.get("save_interval", 1000))
+
+    online_rollout = bool(
+        validation_cfg.get(
+            "online_rollout",
+            False,
+        )
+    )
+
+    rollout_interval = int(
+        validation_cfg.get(
+            "rollout_interval",
+            5000,
+        )
+    )
+
+    grad_clip_norm = training_cfg.get("grad_clip")
     if grad_clip_norm is not None:
         grad_clip_norm = float(grad_clip_norm)
     max_val_batches = validation_cfg.get('max_batches')
@@ -108,6 +135,7 @@ def main(config, args):
     running_count = 0
     last_completed_step = start_step
     progress = tqdm(total=max_steps, initial=start_step, desc='Training', dynamic_ncols=True)
+
     try:
         for step in range(start_step + 1, max_steps + 1):
             batch = next(train_iterator)
@@ -116,13 +144,16 @@ def main(config, args):
             running_loss += train_loss
             running_count += 1
             metrics = {}
+
             if step % log_interval == 0 or step == max_steps:
                 mean_train_loss = running_loss / running_count
                 metrics['train/loss'] = mean_train_loss
                 metrics['train/learning_rate'] = optimizer.param_groups[0]['lr']
                 running_loss = 0.0
                 running_count = 0
+
             validation_due = step % val_interval == 0 or step == max_steps
+
             if validation_due:
                 val_loss = validate(model=model, val_loader=val_loader, normalizer=normalizer, device=device, use_force=use_force, max_batches=max_val_batches)
                 metrics['val/loss'] = val_loss
@@ -130,6 +161,63 @@ def main(config, args):
                     best_val_loss = val_loss
                     save_checkpoint(path=output_dir / 'best.pt', model=model, optimizer=optimizer, normalizer=normalizer, config=config, step=step, best_val_loss=best_val_loss, wandb_run_id=wandb_run_id)
                     print(f'\nNew best validation loss: {best_val_loss:.6f}')
+
+            rollout_due = (
+                online_rollout
+                and (
+                    step % rollout_interval == 0
+                    or step == max_steps
+                )
+            )
+
+            if rollout_due:
+                rollout_metrics, video_path = (
+                    run_sim_rollout_validation(
+                        model=model,
+                        normalizer=normalizer,
+                        config=config,
+                        device=device,
+                        step=step,
+                        output_dir=output_dir,
+                    )
+                )
+
+                rollout_log = {}
+
+                for key, value in rollout_metrics.items():
+                    if isinstance(value, (int, float)):
+                        rollout_log[f"rollout/{key}"] = float(value)
+
+                print(
+                    f"\nOnline rollout @ step {step}: "
+                    f"success="
+                    f"{rollout_metrics['success_rate']:.3f}"
+                )
+
+                if run is not None:
+                    if (
+                        video_path is not None
+                        and video_path.exists()
+                    ):
+                        import wandb
+
+                        rollout_log["rollout/video"] = wandb.Video(
+                            str(video_path),
+                            fps=int(
+                                validation_cfg.get(
+                                    "video_fps",
+                                    20,
+                                )
+                            ),
+                            format="mp4",
+                        )
+
+                    run.log(
+                        rollout_log,
+                        step=step,
+                    )
+
+
             if step % checkpoint_interval == 0:
                 save_checkpoint(path=output_dir / 'latest.pt', model=model, optimizer=optimizer, normalizer=normalizer, config=config, step=step, best_val_loss=best_val_loss, wandb_run_id=wandb_run_id)
             if run is not None and metrics:

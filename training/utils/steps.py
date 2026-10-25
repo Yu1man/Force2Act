@@ -4,7 +4,7 @@ import torch
 from tqdm.auto import tqdm
 
 from force2act.models.policy.flow_matching import flow_matching_loss
-from force2act.training.utils.batch import prepare_batch
+from training.utils.batch import prepare_batch
 
 
 def train_step(model, batch, normalizer, optimizer, device, use_force, grad_clip_norm=None):

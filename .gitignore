@@ -18,3 +18,8 @@ tests/
 datasets/
 
 command.md
+
+checkpoints/
+
+configs/*
+!configs/test.yaml

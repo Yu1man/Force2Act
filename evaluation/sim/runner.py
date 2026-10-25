@@ -1161,6 +1161,7 @@ def render_observation(
         frame = image_to_hwc_uint8(
             observation[camera_key],
             camera_key,
+            flip_vertical=False,
         )
 
         frames.append(frame)
@@ -1332,7 +1333,6 @@ def evaluate_policy_rollouts(
         dataset_path=dataset_cfg["hdf5_path"],
         camera_names=camera_names,
         image_size=int(dataset_cfg["image_size"]),
-        render=False,
         expected_env_name=dataset_cfg.get(
             "robosuite_env_name"
         ),
@@ -2425,7 +2425,7 @@ def evaluate_policy_rollouts(
                         state_keys=state_keys,
                         camera_keys=camera_keys,
                         force_keys=force_keys,
-                        flip_images=(task_type != "nut_assembly_square"),
+                        flip_images=False,
                     )
                     inputs = {
                         key: value.to(device)
@@ -3240,9 +3240,7 @@ def evaluate_policy_rollouts(
                                 image_to_hwc_uint8(
                                     observation[video_camera_key],
                                     video_camera_key,
-                                    flip_vertical=(
-                                        task_type != "nut_assembly_square"
-                                    ),
+                                    flip_vertical=False,
                                 )
                             )
 
