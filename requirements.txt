@@ -1,13 +1,29 @@
-# Core numerical / data dependencies
+# Force2Act requirements (tested with Python 3.10)
+#
+# For GPU training, install the PyTorch build that matches your CUDA version
+# first (see https://pytorch.org/get-started/locally/), then run:
+#   pip install -r requirements.txt
+
+# Core
 numpy>=1.26
 h5py>=3.10
 PyYAML>=6.0
+tqdm>=4.66
 
 # Deep learning
 torch>=2.2
 torchvision>=0.17
 timm>=1.0
 
-# Training / experiment utilities
+# Simulation (data collection + closed-loop evaluation)
+mujoco>=3.2
+robosuite>=1.5
+robomimic>=0.3          # only needed for the nut-assembly collector
+
+# Video / image I/O
+opencv-python>=4.8
+imageio>=2.34
+imageio-ffmpeg>=0.5
+
+# Experiment tracking (optional, disable with --no-wandb)
 wandb>=0.17
-tqdm>=4.66

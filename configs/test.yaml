@@ -30,7 +30,7 @@ dataset:
   image_std: [0.229, 0.224, 0.225]
 
 model:
-  architecture: cross_attn
+  architecture: cross_attn # no_force, cross_attn, force_adaln, fsra
   state_dim: 9
   force_dim: 3
 
